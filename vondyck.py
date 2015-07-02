@@ -113,7 +113,7 @@ if __name__=="__main__":
     
     #rules = RewriteRuleset.parse( "aA->e, bB->e")
     
-    rules = vdRule( 3, 3)
+    rules = vdRule( 5, 4)
     #rules, showElem = powerVondyck(4,5)
 
     def showProgress(i, s):
@@ -128,8 +128,9 @@ if __name__=="__main__":
 
 
     from automaton import *
-    automaton, initial_state = build_accepting_automaton( 'abAB', list(rules.suffices()) )
+    automaton, initial_state = build_accepting_automaton( 'abAB', list(rules1.suffices()) )
 
+    print (automaton.state_names)
     #print (automaton.transitions)
     with open("wd.dot","w") as dotfile:
         export_dot(automaton, dotfile)
