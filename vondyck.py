@@ -138,7 +138,8 @@ if __name__=="__main__":
     print("growth func:")
     func = automaton_growth_func(automaton, initial_state)
     print("funciton calculated, simplifying...")
-    func = func.simplify()
+    import sympy
+    func = sympy.cancel(func)
     print("done. Printing...")
     print(func)
                                            

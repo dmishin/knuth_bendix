@@ -43,7 +43,6 @@ def automaton_growth_func( automaton, initial_state ):
         for new_state in state_transitions.values():
             a[new_state, state] = 1
     b = Matrix( n,1,[0]*n )
-
     b[initial_state] = 1
 
     c = Matrix( 1, n, [1]*n)
@@ -53,6 +52,7 @@ def automaton_growth_func( automaton, initial_state ):
     #(z*eye(n)-a).inv().print_nonzero()  
     q = z*eye(n)-a
     f = c * q.LUsolve(b) * z
+    #f = (c * q.adjugate() * b * z)/q.det()
     assert f.shape == (1,1)
     return f[0,0]
     #f_num = c * q.adjugate() * b
@@ -103,6 +103,8 @@ def build_accepting_automaton( alphabet, forbidden_suffices, suffix2name=str ):
                   for suffix in forbidden_suffices 
                   for pref in initials(suffix) 
     )
+                
+
     #print ("FOrbidden:", forbidden_set)
     #print ("States:", states)
     state2index = {}
