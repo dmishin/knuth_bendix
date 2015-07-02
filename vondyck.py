@@ -113,7 +113,7 @@ if __name__=="__main__":
     
     #rules = RewriteRuleset.parse( "aA->e, bB->e")
     
-    rules = vdRule( 5, 4)
+    rules = vdRule( 5, 5)
     #rules, showElem = powerVondyck(4,5)
 
     def showProgress(i, s):
@@ -130,16 +130,31 @@ if __name__=="__main__":
     from automaton import *
     automaton, initial_state = build_accepting_automaton( 'abAB', list(rules1.suffices()) )
 
-    print (automaton.state_names)
+    print ("Number of states:", len(automaton.state_names))
     #print (automaton.transitions)
     with open("wd.dot","w") as dotfile:
         export_dot(automaton, dotfile)
 
-    print("growth func:")
-    func = automaton_growth_func(automaton, initial_state)
-    print("funciton calculated, simplifying...")
-    import sympy
-    func = sympy.cancel(func)
-    print("done. Printing...")
-    print(func)
-                                           
+    if True:
+        #symbolic growth func
+        print("growth func:")
+        func = automaton_growth_func(automaton, initial_state)
+        print("funciton calculated, simplifying...")
+        import sympy
+        func = sympy.cancel(func)
+        print("done. Printing...")
+        print(func)
+
+    if False:
+        #numeric growth func
+        num, den = growth_function_numpy(automaton, initial_state)
+
+        from ss2tf import *
+        print (num, den)
+
+        gcd = polygcd(num, den)
+        num1,_ = np.polydiv(num,gcd)
+        den1,_ = np.polydiv(den,gcd)
+
+        print (num1, den1)
+        
