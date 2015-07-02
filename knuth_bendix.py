@@ -2,10 +2,9 @@
 #algorithm 3, 4
 import itertools
 
-def dprint(*args, **kwargs):
-    pass
+#def dprint(*args, **kwargs):    pass
 
-#dprint = print
+dprint = print
 
 def showValue(s, valueRepr=str):
     """printable representation of elements"""
@@ -76,6 +75,7 @@ class RewriteRuleset:
                 rewriteAs = rules.get(suffix)
                 if rewriteAs is not None:
                     #Rewrite found!
+                    dprint("Rewrite", suffix, "as", rewriteAs)
                     del s[-suffixLen:]
                     xs.extend( reversed(rewriteAs) )
                     continue
@@ -180,7 +180,7 @@ def knuthBendixCompletion(S, lessOrEqual):
             if hasOverlap:
                 t1, t2 = map(S, (s1,s2))
                 if t1 != t2:
-                    #dprint ("Conflict found", v1, w1, v2, w2)
+                    dprint ("Conflict found", v1, w1, v2, w2)
                     t1, t2 = sortPairReverse(t1, t2, lessOrEqual)
                     #dprint("    add rule:", (t1,t2) )
                     SS.add(t1, t2)

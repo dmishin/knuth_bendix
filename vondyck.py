@@ -37,6 +37,12 @@ def groupPowers(s):
     if last is not None:
         yield last, lastPow
 
+def groupedShortLex(s1, s2):
+    p1 = tuple(groupPowers(s1))
+    p2 = tuple(groupPowers(s2))
+    print ("####", s1,p1," <> ", s2,p2)
+    return shortLex( p1, p2)
+        
 def groupPowersVd(s):
     for x, p in groupPowers(s):
         if x.upper() == x:
@@ -48,6 +54,14 @@ def showGroupedPowers(s):
     if not s: return "e"
     return " ".join( (x if p == 1 else x+"^"+str(p))
                      for x, p in groupPowersVd(s))
+
+def printVDRules(rules1):
+    print ("{")
+    for v,w in rules1._sortedItems():
+        print("   {sv}\t-> {sw}".format(sv = showGroupedPowers(v),
+                                        sw = showGroupedPowers(w)))
+
+    print ("}")
 
 
 
@@ -105,56 +119,36 @@ def powerVondyck(n, m):
     relations[(ib,ia,ib,ia)] = ()
     
     return RewriteRuleset(relations), showElement
-    
-if __name__=="__main__":
 
-    #print (powerVondyck(4,5))
-    
-    
-    #rules = RewriteRuleset.parse( "aA->e, bB->e")
-    
-    rules = vdRule( 5, 5)
-    #rules, showElem = powerVondyck(4,5)
+if __name__=="__main__":
+    rules = vdRule( 3, 4)
 
     def showProgress(i, s):
         print ("Iteration {i}, ruleset size: {n}".format(i=i,n=s.size()))
-    rules1 = knuthBendix (rules, onIteration=showProgress, maxRulesetSize=10000)
+        
+    rules1 = knuthBendix (rules,
+                          #lessOrEqual = groupedShortLex,
+                          #onIteration=showProgress,
+                          maxRulesetSize=10000)
     rules1.pprint()
 
+    #printVDRules(rules1)
 
-    for v,w in rules1._sortedItems():
-        print("   {sv}\t-> {sw}".format(sv = showGroupedPowers(v),
-                                       sw = showGroupedPowers(w)))
-
-
-    from automaton import *
+    from automaton import build_accepting_automaton, automaton_growth_func
     automaton, initial_state = build_accepting_automaton( 'abAB', list(rules1.suffices()) )
 
+    
     print ("Number of states:", len(automaton.state_names))
-    #print (automaton.transitions)
-    with open("wd.dot","w") as dotfile:
-        export_dot(automaton, dotfile)
 
-    if True:
-        #symbolic growth func
-        print("growth func:")
-        func = automaton_growth_func(automaton, initial_state)
-        print("funciton calculated, simplifying...")
-        import sympy
-        func = sympy.cancel(func)
-        print("done. Printing...")
-        print(func)
+    
+    #with open("wd.dot","w") as dotfile:
+    #    export_dot(automaton, dotfile)
 
-    if False:
-        #numeric growth func
-        num, den = growth_function_numpy(automaton, initial_state)
 
-        from ss2tf import *
-        print (num, den)
+    #symbolic growth func
+    print("Growth function:")
+    func = automaton_growth_func(automaton, initial_state)
+    import sympy
+    func = sympy.cancel(func)
+    print(func)
 
-        gcd = polygcd(num, den)
-        num1,_ = np.polydiv(num,gcd)
-        den1,_ = np.polydiv(den,gcd)
-
-        print (num1, den1)
-        
