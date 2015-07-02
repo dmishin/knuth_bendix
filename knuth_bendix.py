@@ -23,18 +23,18 @@ class RewriteRuleset:
 
     def pprint(self):
         print ("{")
-        for v, w in self.__sortedItems():
+        for v, w in self._sortedItems():
             print ("  {sv} -> {sw}".format(sv = showValue(v), sw = showValue(w)))
         print ("}")
     def copy(self): return RewriteRuleset(self.rules.copy())
-    def __sortedItems(self):
+    def _sortedItems(self):
         shortKey = LessKey(shortLex)
         return sorted(self.rules.items(),
                       key=lambda vw: shortKey(vw[0]))
     
     def __str__(self):
         return "{"+", ".join( "{sv}->{sw}".format(sv = showValue(v), sw = showValue(w))
-                              for v, w in self.__sortedItems()) +"}"
+                              for v, w in self._sortedItems()) +"}"
 
     def size(self): return len(self.rules)    
     def items(self): return self.rules.items()
@@ -44,6 +44,7 @@ class RewriteRuleset:
         self.rules[v] = w
     def remove(self, v):
         del self.rules[v]
+        
     def normalize( self, lessOrEq ):
         SS  = dict()
         for v, w in self.rules.items():
@@ -179,9 +180,9 @@ def knuthBendixCompletion(S, lessOrEqual):
             if hasOverlap:
                 t1, t2 = map(S, (s1,s2))
                 if t1 != t2:
-                    dprint ("Conflict found", v1, w1, v2, w2)
+                    #dprint ("Conflict found", v1, w1, v2, w2)
                     t1, t2 = sortPairReverse(t1, t2, lessOrEqual)
-                    dprint("    add rule:", (t1,t2) )
+                    #dprint("    add rule:", (t1,t2) )
                     SS.add(t1, t2)
     return SS
 
@@ -197,12 +198,12 @@ def simplifyRules(S_, lessOrEqual):
         
         addBack = True
         if vv == ww:
-            dprint("Redundant rewrite", v, w)
+            #dprint("Redundant rewrite", v, w)
             addBack = False
         else:
             vw1 = sortPairReverse(vv,ww, lessOrEqual)
             if vw1 != vw:
-                dprint ("Simplify rule:", vw, "->", vw1 )
+                #dprint ("Simplify rule:", vw, "->", vw1 )
                 S.add( *vw1 )
                 Slist.append(vw1)
                 addBack = False
@@ -210,44 +211,25 @@ def simplifyRules(S_, lessOrEqual):
             S.add(v,w)
     return S
 
-def knuthBendix(S, lessOrEqual, maxIters = 1000, maxRulesetSize = 1000):
-    S = S.normalize(lessOrEqual)
-    dprint ("Original:")
-    S.pprint()
+def knuthBendix(S0, lessOrEqual=shortLex, maxIters = 1000, maxRulesetSize = 1000, onIteration=None):
+    """Main funciton of the Knuth-Bendix completion algorithm.
+    arguments:
+    S - original rewrite table
+    lessOrEqual - comparator for strings. shortLex is the default one.
+    maxIters - maximal number of iterations. If reached, exception is raised.
+    maxRulesetSize - maximal number of ruleset. If reached, exception is raised.
+    onIteration - callback, called each iteration of the method. It receives iteration number and current table.
+    """
+    S = S0.normalize(lessOrEqual)
     for i in range(maxIters):
         if S.size() > maxRulesetSize:
             raise ValueError("Ruleset grew too big")
-        
-        dprint ("---------------------------------------")
         SS = simplifyRules(S, lessOrEqual)
         SSS = knuthBendixCompletion(SS, lessOrEqual)
         if SSS == S:
-            dprint ("Convergence achieved in", i, "steps")
+            #Convergence achieved!
             return SSS
-        dprint("Continuing search...")
+        if onIteration: onIteration( i, S )
         S = SSS
     raise ValueError("Iterations exceeded")
     
-def dynRule(n, m, k=2):
-    """Create initial ruleset for dynkin group"""
-    return RewriteRuleset({
-        tuple('aA'): (),
-        tuple('bB'): (),
-        tuple('BA'*k): (),
-        tuple('ab'*k): (),
-
-        tuple( 'A'*n ): (),
-        tuple( 'a'*n ): (),
-             
-        tuple( 'B'*m ): (),
-        tuple( 'b'*m ): () })
-             
-
-if __name__=="__main__":
-    rules = RewriteRuleset.parse( "aA->e, bB->e, AAAA->e")
-    
-    rules = dynRule( 16, 2)
-    
-    rules1 = knuthBendix (rules, shortLex)
-    rules1.pprint()
-
