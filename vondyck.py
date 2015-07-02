@@ -135,5 +135,9 @@ if __name__=="__main__":
         export_dot(automaton, dotfile)
 
     print("growth func:")
-    print(automaton_growth_func(automaton, initial_state))
+    func = automaton_growth_func(automaton, initial_state)
+    print("funciton calculated, simplifying...")
+    func = func.simplify()
+    print("done. Printing...")
+    print(func)
                                            
