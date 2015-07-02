@@ -31,7 +31,7 @@ class RewriteRuleset:
         shortKey = LessKey(shortLex)
         return sorted(self.rules.items(),
                       key=lambda vw: shortKey(vw[0]))
-    
+    def suffices(self): return self.rules.keys()
     def __str__(self):
         return "{"+", ".join( "{sv}->{sw}".format(sv = showValue(v), sw = showValue(w))
                               for v, w in self._sortedItems()) +"}"

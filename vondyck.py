@@ -113,8 +113,8 @@ if __name__=="__main__":
     
     #rules = RewriteRuleset.parse( "aA->e, bB->e")
     
-    #rules = vdRule( 5, 4)
-    rules, showElem = powerVondyck(4,5)
+    rules = vdRule( 3, 3)
+    #rules, showElem = powerVondyck(4,5)
 
     def showProgress(i, s):
         print ("Iteration {i}, ruleset size: {n}".format(i=i,n=s.size()))
@@ -123,6 +123,17 @@ if __name__=="__main__":
 
 
     for v,w in rules1._sortedItems():
-        print("   {sv}\t-> {sw}".format(sv = showGroupedPowers(v,showElem),
-                                       sw = showGroupedPowers(w,showElem)))
+        print("   {sv}\t-> {sw}".format(sv = showGroupedPowers(v),
+                                       sw = showGroupedPowers(w)))
 
+
+    from automaton import *
+    automaton, initial_state = build_accepting_automaton( 'abAB', list(rules.suffices()) )
+
+    #print (automaton.transitions)
+    with open("wd.dot","w") as dotfile:
+        export_dot(automaton, dotfile)
+
+    print("growth func:")
+    print(automaton_growth_func(automaton, initial_state))
+                                           
