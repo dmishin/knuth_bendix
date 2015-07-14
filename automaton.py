@@ -31,30 +31,68 @@ class Automaton:
             s = ts[s][inp]
         return s
 
-def automaton_growth_func( automaton, initial_state ):
-    """Returns Z-transform of the growth function of this automaton
-    Uses SYmpy for calculations"""
-    from sympy import Symbol, Matrix, eye
-    z = Symbol('z')
-    
+
+def growth_matrices( automaton, initial_state ):
+    """Returns 2 matrices: A,b,c, defining a discrete-time linear system whose impulse responce
+    is number of accepted strings.
+    """
     n  = automaton.num_states()
-    a = Matrix( [[0]*n]*n )
+    a = [ [0 for _ in range(n)]
+          for __ in range(n)]
     for state, state_transitions in enumerate(automaton.transitions ):
         for new_state in state_transitions.values():
-            a[new_state, state] = 1
-    b = Matrix( n,1,[0]*n )
+            a[new_state][state] = 1
+    b = [0]*n
     b[initial_state] = 1
 
-    c = Matrix( 1, n, [1]*n)
+    c = [1]*n
+    return a,b,c
 
-    #a.print_nonzero()
+
+#actually useless
+"""
+def growth_function_numpy( automaton, initial_state ):
+    import numpy as np
+    a,b,c = (np.array(x)
+             for x in growth_matrices(automaton, initial_state))
+
+    from ss2tf import ss2tf
+    num, den = ss2tf(a,b,c)
+    return list(map(round, num)), list(map(round, den))
+"""
+
+def automaton_growth_func( automaton, initial_state, variable='z' ):
+    """Returns Z-transform of the growth function of this automaton
+    Uses SYmpy for calculations"""
+    from sympy import Symbol, Matrix, eye, cancel
+    z = variable if isinstance(variable,Symbol) else Symbol(variable)
     
-    #(z*eye(n)-a).inv().print_nonzero()  
-    q = z*eye(n)-a
-    f = c * q.LUsolve(b) * z
+    n  = automaton.num_states()
+    a_,b_,c_ = growth_matrices(automaton, initial_state)
+    #a.print_nonzero()
+    c = Matrix( 1, n, c_)
+    b = Matrix( n, 1, b_)
+    a = Matrix( a_)
+    del a_, b_, c_
+    
+    #(z*eye(n)-a).inv().print_nonzero()
+
+    if False: #naiive implementation
+        q = z*eye(n)-a
+        f = c * q.LUsolve(b) * z
+        assert f.shape == (1,1)
+        return f[0,0]
+    
+    if True:
+        #use trick...
+        den = a.berkowitz_charpoly(z)
+        #print("#### charpoly:", den)
+        num = (a - b*c).berkowitz_charpoly(z) - den
+        #print("#### numerator:", num)
+        return num/den
+    
     #f = (c * q.adjugate() * b * z)/q.det()
-    assert f.shape == (1,1)
-    return f[0,0]
+
     #f_num = c * q.adjugate() * b
     #f_den = q.det() / z
     #assert f_num.shape == (1,1)

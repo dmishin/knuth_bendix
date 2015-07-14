@@ -43,6 +43,12 @@ def groupPowers(s):
     if last is not None:
         yield last, lastPow
 
+def groupedShortLex(s1, s2):
+    p1 = tuple(groupPowers(s1))
+    p2 = tuple(groupPowers(s2))
+    print ("####", s1,p1," <> ", s2,p2)
+    return shortLex( p1, p2)
+        
 def groupPowersVd(s):
     for x, p in groupPowers(s):
         if x.upper() == x:
@@ -54,6 +60,14 @@ def showGroupedPowers(s):
     if not s: return "e"
     return " ".join( (x if p == 1 else x+"^"+str(p))
                      for x, p in groupPowersVd(s))
+
+def printVDRules(rules1):
+    print ("{")
+    for v,w in rules1._sortedItems():
+        print("   {sv}\t-> {sw}".format(sv = showGroupedPowers(v),
+                                        sw = showGroupedPowers(w)))
+
+    print ("}")
 
 
 
@@ -111,14 +125,9 @@ def powerVondyck(n, m):
     relations[(ib,ia,ib,ia)] = ()
     
     return RewriteRuleset(relations), showElement
-    
-if __name__=="__main__":
 
-    #print (powerVondyck(4,5))
-    
-    
-    #rules = RewriteRuleset.parse( "aA->e, bB->e")
-    
+
+if __name__=="__main__":
     #rules = vdNoInverse( 4, 4)
     import sys
     try:
@@ -148,18 +157,9 @@ if __name__=="__main__":
         from automaton import *
         automaton, initial_state = build_accepting_automaton( 'abAB', list(rules1.suffices()) )
 
-    #print (automaton.state_names)
-    #print (automaton.transitions)
-    #with open("wd.dot","w") as dotfile:
-    #    export_dot(automaton, dotfile)
-
-    #print("growth func:")
-    #func = automaton_growth_func(automaton, initial_state)
-    #print("funciton calculated, simplifying...")
-    #import sympy
-    #func = sympy.cancel(func)
-    #print("done. Printing...")
-    #print(func)
-                                           
-
-    #print (repr(rules1.rules))
+        #symbolic growth func
+        print("Growth function:")
+        func = automaton_growth_func(automaton, initial_state)
+        import sympy
+        func = sympy.cancel(func)
+        print(func)
