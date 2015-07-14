@@ -274,9 +274,6 @@ class CodeGenerator(JsCodeGenerator):
         return "Node"+letter.upper()
 
 
-    def _analyzeTrivialRules(self):
-        """Trivial rules have form:
-        
         
     def _powerRewriteRules(self):
         for key, rewrite in self.rewriteTable.items():
