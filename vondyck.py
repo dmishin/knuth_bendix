@@ -19,6 +19,12 @@ def vdRule(n, m, k=2):
         tuple( 'B'*m ): (),
         tuple( 'b'*m ): () })
 
+def vdNoInverse(n, m, k=2):
+    return RewriteRuleset({
+        tuple('ab'*k): (),
+        tuple( 'a'*n ): (),
+        tuple( 'b'*m ): () })
+    
 
 def groupPowers(s):
     last = None
@@ -113,33 +119,47 @@ if __name__=="__main__":
     
     #rules = RewriteRuleset.parse( "aA->e, bB->e")
     
-    rules = vdRule( 5, 4)
+    #rules = vdNoInverse( 4, 4)
+    import sys
+    try:
+        p = int(sys.argv[1])
+        q = int(sys.argv[2])
+    except IndexError:
+        print("Usage: vondyck p q")
+        exit(1)
+        
+    print ("========== Rule for vD({p},{q},2) ==========".format(**locals()))
+    
+    rules = vdRule(p, q)
     #rules, showElem = powerVondyck(4,5)
 
     def showProgress(i, s):
-        print ("Iteration {i}, ruleset size: {n}".format(i=i,n=s.size()))
+        #print ("Iteration {i}, ruleset size: {n}".format(i=i,n=s.size()))
+        pass
     rules1 = knuthBendix (rules, onIteration=showProgress, maxRulesetSize=10000)
-    rules1.pprint()
+
+    for i,(v,w) in enumerate(rules1._sortedItems()):
+        print("{i:2})   {sv}\t-> {sw}".format(i=i+1,
+                                              sv = showGroupedPowers(v),
+                                              sw = showGroupedPowers(w)))
 
 
-    for v,w in rules1._sortedItems():
-        print("   {sv}\t-> {sw}".format(sv = showGroupedPowers(v),
-                                       sw = showGroupedPowers(w)))
+    if False:
+        from automaton import *
+        automaton, initial_state = build_accepting_automaton( 'abAB', list(rules1.suffices()) )
 
-
-    from automaton import *
-    automaton, initial_state = build_accepting_automaton( 'abAB', list(rules1.suffices()) )
-
-    print (automaton.state_names)
+    #print (automaton.state_names)
     #print (automaton.transitions)
-    with open("wd.dot","w") as dotfile:
-        export_dot(automaton, dotfile)
+    #with open("wd.dot","w") as dotfile:
+    #    export_dot(automaton, dotfile)
 
-    print("growth func:")
-    func = automaton_growth_func(automaton, initial_state)
-    print("funciton calculated, simplifying...")
-    import sympy
-    func = sympy.cancel(func)
-    print("done. Printing...")
-    print(func)
+    #print("growth func:")
+    #func = automaton_growth_func(automaton, initial_state)
+    #print("funciton calculated, simplifying...")
+    #import sympy
+    #func = sympy.cancel(func)
+    #print("done. Printing...")
+    #print(func)
                                            
+
+    #print (repr(rules1.rules))
