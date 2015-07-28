@@ -140,7 +140,9 @@ if __name__=="__main__":
     print ("========== Rule for vD({p},{q},2) ==========".format(**locals()))
     
     rules = vdRule(p, q)
-    #rules, showElem = powerVondyck(4,5)
+    showElem = str
+    
+    #rules, showElem = powerVondyck(p, q)
 
     def showProgress(i, s):
         #print ("Iteration {i}, ruleset size: {n}".format(i=i,n=s.size()))
@@ -153,7 +155,7 @@ if __name__=="__main__":
                                               sw = showGroupedPowers(w)))
 
 
-    if False:
+    if True:
         from automaton import *
         automaton, initial_state = build_accepting_automaton( 'abAB', list(rules1.suffices()) )
 
