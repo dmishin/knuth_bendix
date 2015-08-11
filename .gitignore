@@ -58,3 +58,4 @@ target/
 
 coffee/node_modules/browserify
 coffee/node_modules/coffeeify
+coffee/*.js
