@@ -5,6 +5,7 @@
 {RewriteRuleset, knuthBendix} = require "./knuth_bendix.coffee"
 {mooreNeighborhood, evaluateTotalisticAutomaton, exportField} = require "./field.coffee"
 {getCanvasCursorPosition} = require "./canvas_util.coffee"
+{runCommands}= require "./context_delegate.coffee"
 {lzw_encode} = require "./lzw.coffee"
 
 M = require "./matrix3.coffee"
@@ -20,82 +21,196 @@ class FieldObserver
     @cells = visibleNeighborhood @tessellation, @appendRewrite, @minCellSize
     @cellOffsets = (node2array(c) for c in @cells)
     @cellTransforms = (nodeMatrixRepr(c, @tessellation.group) for c in @cells)
+    @drawEmpty = true
+    @jumpLimit = 1.5
+    @tfm = M.eye()
+    
+    @viewUpdates = 0
+    #precision falls from 1e-16 to 1e-9 in 1000 steps.
+    @maxViewUpdatesBeforeCleanup = 500
+    @xyt2path = makeXYT2path @tessellation.group, @appendRewrite
+
+    @onFinish = null
+
   rebuildAt: (newCenter) ->
     @center = newCenter
     @cells = for offset in @cellOffsets
       #it is important to make copy since AR empties the array!
       eliminateFinalA @appendRewrite(newCenter, offset[..]), @appendRewrite, @tessellation.group.n
+    @_observedCellsChanged()
     return
+    
+  _observedCellsChanged: ->
     
   translateBy: (appendArray) ->
     #console.log  "New center at #{showNode newCenter}"
     @rebuildAt @appendRewrite @center, appendArray
-        
-  draw: (cells, viewMatrix, context) ->
-    context.fillStyle = "black"
-    context.lineWidth = 1.0/400.0
-    context.strokeStyle = "rgb(128,128,128)"
-
+  canDraw: -> true        
+  draw: (cells, context) ->
     #first borders
-    context.beginPath()
-    for cell, i in @cells
-      unless cells.get cell
-        cellTfm = @cellTransforms[i]
-        mtx = M.mul viewMatrix, cellTfm
-        @tessellation.makeCellShapePoincare mtx, context
-    context.stroke()
+    if @drawEmpty
+      context.beginPath()
+      for cell, i in @cells
+        unless cells.get cell
+          cellTfm = @cellTransforms[i]
+          mtx = M.mul @tfm, cellTfm
+          @tessellation.makeCellShapePoincare mtx, context
+      context.stroke()
 
     #then cells
     context.beginPath()
     for cell, i in @cells
       if cells.get cell
         cellTfm = @cellTransforms[i]
-        mtx = M.mul viewMatrix, cellTfm
+        mtx = M.mul @tfm, cellTfm
         @tessellation.makeCellShapePoincare  mtx, context        
     context.fill()
-    return      
-        
-mooreNeighborhood = (n, m, appendRewrite)->(chain)->
-  #reutrns Moore (vertex) neighborhood of the cell.
-  # it contains N cells of von Neumann neighborhood
-  #    and N*(M-3) cells, sharing single vertex.
-  # In total, N*(M-2) cells.
-  neighbors = []
-  for powerA in [0...n] by 1
-    for powerB in [1...m-1] by 1
-      #adding truncateA to eliminate final rotation of the chain.
-      nStep = if powerA
-            [['b', powerB], ['a', powerA]]
-        else
-            [['b', powerB]]
-      neigh = eliminateFinalA appendRewrite(chain, nStep), appendRewrite, n
-      neighbors.push neigh
-  return neighbors
-
-neighborsSum = (cells, getNeighborhood)->
-  sums = new NodeHashMap
-  plus = (x,y)->x+y
-  cells.forItems (cell, value)->
-    if value isnt 1
-      throw new Error "Value of #{showNode cell} is not 1: #{value}"
-    for neighbor in getNeighborhood cell
-      sums.putAccumulate neighbor, value, plus
-  return sums
-
-evaluateWithNeighbors = (cells, getNeighborhood, nextStateFunc)->
-  newCells = new NodeHashMap
-  sums = neighborsSum cells, getNeighborhood
+    #true because immediate-mode observer always finishes drawing.
+    return true
   
-  sums.forItems (cell, neighSum)->
-    #console.log "#{showNode cell}, sum=#{neighSum}"
-    cellState = cells.get(cell) ? 0
-    nextState = nextStateFunc cellState, neighSum
-    if nextState isnt 0
-      newCells.put cell, nextState
-  return newCells
+  checkViewMatrix: ->
+    #me = [-1,0,0,  0,-1,0, 0,0,-1]
+    #d = M.add( me, M.mul(tfm, M.hyperbolicInv tfm))
+    #ad = (Math.abs(x) for x in d)
+    #maxDiff = Math.max( ad ... )
+    #console.log "Step: #{viewUpdates}, R: #{maxDiff}"
+    if (@viewUpdates+=1) > @maxViewUpdatesBeforeCleanup
+      @viewUpdates = 0
+      @tfm = M.cleanupHyperbolicMoveMatrix @tfm
+    
+  modifyView: (m) ->
+    @tfm = M.mul m, @tfm
+    @checkViewMatrix()
+    originDistance = @viewDistanceToOrigin()
+    if originDistance > @jumpLimit
+      @rebaseView()
+    @renderGrid @tfm
+    
+  renderGrid: (viewMatrix) ->
+    #for immediaet mode observer, grid is rendered while drawing.
+    @onFinish?()
+    
+  viewDistanceToOrigin: ->
+    #viewCenter = M.mulv tfm, [0.0,0.0,1.0]
+    #Math.acosh(viewCenter[2])
+    Math.acosh @tfm[8]
+    
+  #build new view around the cell which is currently at the center
+  rebaseView: ->
+    centerCoord = M.mulv (M.inv @tfm), [0.0, 0.0, 1.0]
+    pathToCenterCell = @xyt2path centerCoord
+    #console.log "Jump by #{showNode pathToCenterCell}"
+    m = nodeMatrixRepr pathToCenterCell, @tessellation.group
+
+    #modifyView won't work, since it multiplies in different order.
+    @tfm = M.mul @tfm, m
+    @checkViewMatrix()
+
+    #move observation point
+    @translateBy node2array pathToCenterCell
+
+  #xp, yp in range [-1..1]
+  cellFromPoint:(xp,yp) ->
+    xyt = poincare2hyperblic xp, yp
+    throw new Error("point outside") if xyt is null
+    #inverse transform it...
+    xyt = M.mulv (M.inv @tfm), xyt
+    visibleCell = @xyt2path xyt
+    eliminateFinalA @appendRewrite(@center, node2array(visibleCell)), @appendRewrite, @tessellation.group.n
+    
+  shutdown: -> #nothing to do.
+  
+class FieldObserverWithRemoreRenderer extends FieldObserver
+  constructor: (tessellation, appendRewrite, minCellSize=1.0/400.0)->
+    super tessellation, appendRewrite, minCellSize
+    @worker = new Worker "./render_worker.js"
+    console.log "Worker created: #{@worker}"
+    @worker.onmessage = (e) => @onMessage e
+
+    @cellShapes = null
+
+    @workerReady = false
+
+    @rendering = true
+    @cellSetState = 0
+    @worker.postMessage ["I", [tessellation.group.n, tessellation.group.m, @cellTransforms]]
+    
+    @postponedRenderRequest = null
+
+      
+  _observedCellsChanged: ->
+    console.log "Ignore all responces before answer..."
+    @cellShapes = null
+    @cellSetState+= 1
+    return
+        
+  onMessage: (e) ->
+    #console.log "message received: #{JSON.stringify e.data}"
+    switch e.data[0]    
+      when "I" then @onInitialized e.data[1] ...
+      when "R" then @renderFinished e.data[1], e.data[2]
+      else throw new Error "Unexpected answer from worker: #{JSON.stringify e.data}"
+    return
+    
+  onInitialized: (n,m) ->
+    if (n is @tessellation.group.n) and (m is @tessellation.group.m)
+      console.log "Worker initialized"
+      @workerReady = true
+      #now waiting for first rendered field.
+    else
+      console.log "Init OK message received, but mismatched. Probably, late message"
+      
+  _runPostponed: ->
+    if @postponedRenderRequest isnt null
+      @renderGrid @postponedRenderRequest
+      @postponedRenderRequest = null
+          
+  renderFinished: (renderedCells, cellSetState) ->
+    #console.log "worker finished rendering #{renderedCells.length} cells"
+    @rendering = false
+    if cellSetState is @cellSetState
+      @cellShapes = renderedCells
+      @onFinish?()
+    #else
+    #  console.log "mismatch cell states: answer for #{cellSetState}, but current is #{@cellSetState}"
+    @_runPostponed()
+    
+  renderGrid: (viewMatrix) ->
+    if @rendering or not @workerReady
+      @postponedRenderRequest = viewMatrix
+    else
+      @rendering = true
+      @worker.postMessage ["R", viewMatrix, @cellSetState]
+      
+  canDraw: -> @cellShapes and @workerReady
+  
+  draw: (cells, context) ->
+    if @cellShapes is null
+      console.log "cell shapes null"
+    return false if (not @cellShapes) or (not @workerReady)
+    #first borders
+    if @drawEmpty
+      context.beginPath()
+      for cell, i in @cells
+        unless cells.get cell
+          runCommands context, @cellShapes[i]
+          null
+      context.stroke()
+
+    #then cells
+    context.beginPath()
+    for cell, i in @cells
+      if cells.get cell
+        runCommands context, @cellShapes[i]
+        null
+    context.fill()
+    return true
+  shutdown: ->
+    @worker.terminate()
+    
 
 #determine cordinates of the cell, containing given point
-xyt2cell = (group, appendRewrite, maxSteps=100) -> 
+makeXYT2path = (group, appendRewrite, maxSteps=100) -> 
   getNeighbors = mooreNeighborhood group.n, group.m, appendRewrite
   cell2point = (cell) -> M.mulv nodeMatrixRepr(cell, group), [0.0,0.0,1.0]
   vectorDist = ([x1,y1,t1], [x2,y2,t2]) ->
@@ -216,6 +331,8 @@ parseTransitionFunction = (str, n, m) ->
 #putRandomBlob = (cells, radius, percent, n, m, appendRewrite)->
   
 # ============================================  app code ===============
+#
+
 canvas = E "canvas"
 context = canvas.getContext "2d"
 minVisibleSize = 1/100
@@ -226,19 +343,16 @@ console.log "Finished"
 appendRewrite = makeAppendRewrite rewriteRuleset
 
 getNeighbors = mooreNeighborhood tessellation.group.n, tessellation.group.m, appendRewrite
-xytFromCell = xyt2cell tessellation.group, appendRewrite
 
-viewCenter = null
-#visibleCells = visibleNeighborhood tessellation, appendRewrite, minVisibleSize #farNeighborhood viewCenter, 5, appendRewrite, tessellation.group.n, tessellation.group.m
+ObserverClass = FieldObserverWithRemoreRenderer
+#ObserverClass = FieldObserver
 
-observer = new FieldObserver tessellation, appendRewrite, minVisibleSize
-
-#console.log "Visible field contains #{visibleCells.length} cells"
+observer = new ObserverClass tessellation, appendRewrite, minVisibleSize
+observer.onFinish = -> redraw()
 
 transitionFunc = parseTransitionFunction "B 3 S 2 3", tessellation.group.n, tessellation.group.m
 dragHandler = null
 
-tfm = M.eye()
 cells = new NodeHashMap
 cells.put null, 1
 
@@ -249,7 +363,7 @@ doReset = ->
   redraw()
 
 doStep = ->
-  cells = evaluateWithNeighbors cells, getNeighbors, transitionFunc.evaluate.bind(transitionFunc)
+  cells = evaluateTotalisticAutomaton cells, getNeighbors, transitionFunc.evaluate.bind(transitionFunc)
   redraw()
   updatePopulation()
 
@@ -257,23 +371,33 @@ dirty = true
 redraw = -> dirty = true
 
 drawEverything = ->
-  s = Math.min( canvas.width, canvas.height ) / 2
+  return false unless observer.canDraw()
+  
   context.clearRect 0, 0, canvas.width, canvas.height
   context.save()
+  s = Math.min( canvas.width, canvas.height ) / 2 #
   context.scale s, s
   context.translate 1, 1
-  observer.draw cells, tfm, context
-  context.restore()  
+  context.fillStyle = "black"
+  context.lineWidth = 1.0/s
+  context.strokeStyle = "rgb(128,128,128)"
+  observer.draw cells, context
+  context.restore()
+  return true
 
+fpsLimiting = false
 lastTime = Date.now()
-fpsMax = 10
-dtMax = 1000.0/fpsMax #
+fpsDefault = 30
+dtMax = 1000.0/fpsDefault #
+
 redrawLoop = ->
   if dirty
-    t = Date.now()
-    if t - lastTime > dtMax
-      drawEverything()
-      dirty = false
+    if not fpsLimiting or ((t=Date.now()) - lastTime > dtMax)
+      if drawEverything()
+        tDraw = Date.now() - t
+        #adaptively update FPS
+        dtMax = dtMax*0.9 + tDraw*2*0.1
+        dirty = false
       lastTime = t
   requestAnimationFrame redrawLoop
     
@@ -282,18 +406,17 @@ toggleCellAt = (x,y) ->
   s = Math.min( canvas.width, canvas.height ) * 0.5
   xp = x/s - 1
   yp = y/s - 1
-  xyt = poincare2hyperblic xp, yp
-  #inverse transform it...
-  xyt = M.mulv (M.inv tfm), xyt
-  if xyt isnt null
-    visibleCell = xytFromCell xyt
-    cell = eliminateFinalA appendRewrite(observer.center, node2array(visibleCell)), appendRewrite, tessellation.group.n
-    #console.log showNode cell
-    if cells.get(cell) isnt null
-      cells.remove cell
-    else
-      cells.put cell, 1
-    redraw()
+  try
+    cell = observer.cellFromPoint xp, yp
+  catch e
+    return
+    
+  if cells.get(cell) isnt null
+    cells.remove cell
+  else
+    cells.put cell, 1
+  redraw()
+    
     
 doCanvasClick = (e) ->
   e.preventDefault()
@@ -354,12 +477,13 @@ setGridImpl = (n, m)->
   console.log "Finished"
   appendRewrite = makeAppendRewrite rewriteRuleset
   getNeighbors = mooreNeighborhood tessellation.group.n, tessellation.group.m, appendRewrite
-  xytFromCell = xyt2cell tessellation.group, appendRewrite
   transitionFunc = parseTransitionFunction transitionFunc.toString(), tessellation.group.n, tessellation.group.m
-  observer = new FieldObserver tessellation, appendRewrite, minVisibleSize
+  observer?.shutdown()
+  observer = new ObserverClass tessellation, appendRewrite, minVisibleSize
+  observer.onFinish = -> redraw()
 
-moveView = (dx, dy) -> modifyView M.translationMatrix(dx, dy)        
-rotateView = (angle) -> modifyView M.rotationMatrix angle
+moveView = (dx, dy) -> observer.modifyView M.translationMatrix(dx, dy)        
+rotateView = (angle) -> observer.modifyView M.rotationMatrix angle
   
 class MouseTool
   mouseMoved: ->
@@ -367,34 +491,7 @@ class MouseTool
   mouseDown: ->
     
 
-jumpLimit = 1.5
-  
-modifyView = (m) ->
-  tfm = M.mul m, tfm
-  checkViewMatrix()
-  originDistance = viewDistanceToOrigin()
-  if originDistance > jumpLimit
-    rebaseView()
-  redraw()  
 
-viewDistanceToOrigin = ->
-  #viewCenter = M.mulv tfm, [0.0,0.0,1.0]
-  #Math.acosh(viewCenter[2])
-  Math.acosh tfm[8]
-
-#build new view around the cell which is currently at the center
-rebaseView = ->
-  centerCoord = M.mulv (M.inv tfm), [0.0, 0.0, 1.0]
-  pathToCenterCell = xytFromCell centerCoord
-  #console.log "Jump by #{showNode pathToCenterCell}"
-  m = nodeMatrixRepr pathToCenterCell, tessellation.group
-
-  #modifyView won't work, since it multiplies in different order.
-  tfm = M.mul tfm, m
-  checkViewMatrix()
-
-  #move observation point
-  observer.translateBy node2array pathToCenterCell
 
 updatePopulation = ->
   E('population').innerHTML = ""+cells.count
@@ -402,19 +499,6 @@ updatePopulation = ->
 #redraw()
 updatePopulation()
 redrawLoop()
-
-viewUpdates = 0
-#precision falls from 1e-16 to 1e-9 in 1000 steps.
-maxViewUpdatesBeforeCleanup = 500
-checkViewMatrix = ->
-  #me = [-1,0,0,  0,-1,0, 0,0,-1]
-  #d = M.add( me, M.mul(tfm, M.hyperbolicInv tfm))
-  #ad = (Math.abs(x) for x in d)
-  #maxDiff = Math.max( ad ... )
-  #console.log "Step: #{viewUpdates}, R: #{maxDiff}"
-  if (viewUpdates+=1) > maxViewUpdatesBeforeCleanup
-    viewUpdates = 0
-    tfm = M.cleanupHyperbolicMoveMatrix tfm
 
 class MouseToolPan extends MouseTool
   constructor: (@x0, @y0) ->
