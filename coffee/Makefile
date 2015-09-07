@@ -10,3 +10,6 @@ test:
 start:
 	python -m http.server &
 	xdg-open http://localhost:8000/test_app.html
+
+sample_tabs.js: sample_tabs.coffee tabs.coffee
+	browserify -t coffeeify sample_tabs.coffee > sample_tabs.js

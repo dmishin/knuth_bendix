@@ -1,0 +1,62 @@
+<html>
+  <head><title>Tabs</title>
+    <style type="text/css">
+      #tab-content {
+      height: 3em;
+      background: #eee;
+      }
+      
+      .tab-headers {
+      border 0;
+      padding 0;
+      }
+      
+      .tab-headers button.active {
+      background-color: #eee;
+      border-radius: 1em 1em 0 0;
+      }
+      
+      .tab-headers button{
+      padding: 0.2em 0.5em 0em 0.5em;
+      margin: 0;
+      border: 0;
+      background-color: transparent;
+
+      }
+      .tab-headers button:hover {
+      
+      background-color: #ddd;
+      border-radius: 1em 1em 0 0;
+      
+      }
+    </style>    
+  </head>
+  <body>
+    <h1>Tabs</h1>
+    <div>
+      <div id="tab-headers" class="tab-headers">
+	<button id="tab1">FILE</button>
+	<button id="tab2">RULE</button>
+	<button id="tab3">EDIT</button>
+	<button id="tab4">TESSELLATION</button>
+      </div>
+      <div id="tab-content">
+	<div style="display:none" id="content1">
+	  Some content
+	</div>
+	<div style="display:none" id="content2">
+	  Hello hello hello
+	</div>
+	<div style="display:none" id="content3">
+	  <button id="aaa">Btn</button>
+	</div>
+	<div style="display:none" id="content4">
+	  asdasd
+	</div>
+      </div>
+    </div>
+    <h2>Tabs end here</h2>
+    <script src="sample_tabs.js"></script>
+    
+  </body>
+</html>
