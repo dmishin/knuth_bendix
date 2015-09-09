@@ -4,6 +4,20 @@
       #tab-content {
       height: 3em;
       background: #eee;
+      border: 0;
+      margin: 0;
+      padding: 0.2em;
+      }
+      #tab-content .big-button {
+      height: 3em;
+      }
+      #tab-content .control-group {
+      display: inline-block;
+      border: 1px solid black;
+      margin: 0 0.2em 0 0;
+      padding: 0;
+      height: 100%;
+      vertical-align: top;
       }
       
       .tab-headers {
@@ -29,10 +43,9 @@
       border-radius: 1em 1em 0 0;
       
       }
-    </style>    
+    </style>
   </head>
   <body>
-    <h1>Tabs</h1>
     <div>
       <div id="tab-headers" class="tab-headers">
 	<button id="tab1">FILE</button>
@@ -42,16 +55,39 @@
       </div>
       <div id="tab-content">
 	<div style="display:none" id="content1">
-	  Some content
+	  <div class="control-group">
+	  <button class="big-button">Export</button>
+	  <button class="big-button">Import</button>
+	  </div>
+	  <div class="control-group">
+	  <button class="big-button">Save</button>
+	  <button class="big-button">Open</button>
+	  </div>
 	</div>
 	<div style="display:none" id="content2">
-	  Hello hello hello
+	  <input value="R 2 B 2 3"/>
+	  <button class="big-button">Set</button>
+	  <button class="big-button">Edit...</button>
 	</div>
 	<div style="display:none" id="content3">
-	  <button id="aaa">Btn</button>
+	  <button class="big-button">Clear</button>
+	  <button class="big-button">Random</button>
+	  <button class="big-button">Step</button>
+	  <button class="big-button">Play</button>
 	</div>
 	<div style="display:none" id="content4">
-	  asdasd
+	  <div class="control-group">
+	    <button class="big-button" title="set current tessellation">Set</button>
+	  </div>
+	  
+	  <div class="control-group">
+	  Polygon edges: <input id="tessellation-n" type="range" min="3" max="10"/> <br/>
+	  Vertice edges: <input id="tessellation-m" type="range" min="3" max="10"/>
+	  </div>
+	  <div class="control-group">
+	    <span id="tessellation-symbol"></span>
+	  </div>
+	  <canvas id="tessellation-icon" width="64" height="64"></canvas>
 	</div>
       </div>
     </div>
