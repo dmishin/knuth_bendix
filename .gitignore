@@ -56,6 +56,6 @@ docs/_build/
 # PyBuilder
 target/
 
-coffee/node_modules/browserify
-coffee/node_modules/coffeeify
+coffee/node_modules
+coffee/node_modules
 coffee/*.js
