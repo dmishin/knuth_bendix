@@ -34,8 +34,26 @@ exports.FieldObserver = class FieldObserver
 
   getHomePtrPos: ->
     xyt = [0.0,0.0,1.0]
-    xyt = M.mulv M.hyperbolicInv(@center.repr(@tessellation.group)), xyt
+    #@mtx = M.mul @t.repr(generatorMatrices), generatorMatrices.generatorPower(@letter, @p)
+    # xyt = genPow(head.letter, -head.p) * ... * xyt0
+    #
+    # reference formula.
+    #     #xyt = M.mulv M.hyperbolicInv(@center.repr(@tessellation.group)), xyt
+    # it works, but matrix values can become too large.
+    # 
+    stack = node2array(@center).reverse()
+    #apply inverse transformations in reverse order
+    for [letter, p] in stack by -1
+      xyt = M.mulv @tessellation.group.generatorPower(letter, -p), xyt
+      #Denormalize coordinates to avoid extremely large values.
+      invT = 1.0/xyt[2]
+      xyt[0] *= invT
+      xyt[1] *= invT
+      xyt[2] = 1.0
+    #Finally add view transform
     xyt = M.mulv @tfm, xyt
+    #(denormalizetion not required, view transform is not large)
+    # And map to poincare circle
     hyperbolic2poincare xyt
     
   getColorForState: (state) ->
