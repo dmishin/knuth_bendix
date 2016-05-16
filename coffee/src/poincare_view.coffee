@@ -82,3 +82,8 @@ exports.visibleNeighborhood = (tessellation, appendRewrite, minCellSize) ->
       visibleCells.push cell
   return visibleCells
 
+exports.hyperbolic2poincare = ([x,y,t]) ->
+  #poincare coordinates
+  inv_t = 1.0/(t+1)
+  [x*inv_t, yy = y*inv_t]
+  

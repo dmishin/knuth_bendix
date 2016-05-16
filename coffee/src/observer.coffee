@@ -1,6 +1,6 @@
 "use strict";
 {unity, showNode, node2array} = require "./vondyck_chain.coffee"
-{makeXYT2path, poincare2hyperblic, visibleNeighborhood} = require "./poincare_view.coffee"
+{makeXYT2path, poincare2hyperblic, hyperbolic2poincare, visibleNeighborhood} = require "./poincare_view.coffee"
 {eliminateFinalA} = require "./vondyck_rewriter.coffee"
 M = require "./matrix3.coffee"
 
@@ -31,6 +31,12 @@ exports.FieldObserver = class FieldObserver
     @pattern = ["red", "black", "green", "blue", "yellow", "cyan", "magenta", "gray", "orange"]
 
     @onFinish = null
+
+  getHomePtrPos: ->
+    xyt = [0.0,0.0,1.0]
+    xyt = M.mulv M.hyperbolicInv(@center.repr(@tessellation.group)), xyt
+    xyt = M.mulv @tfm, xyt
+    hyperbolic2poincare xyt
     
   getColorForState: (state) ->
     @pattern[ (state % @pattern.length + @pattern.length) % @pattern.length ]
@@ -90,10 +96,30 @@ exports.FieldObserver = class FieldObserver
       else
         context.fillStyle = @getColorForState state
         context.fill()
-        
+    @drawHomePointer context
     #true because immediate-mode observer always finishes drawing.
     return true
+
+  drawHomePointer: (context)->
+    [x,y] = @getHomePtrPos()
+    context.fillStyle = 'red'
+    context.beginPath()
+    width = height = 0.03
+    context.moveTo x, y - height*0.5
     
+    context.bezierCurveTo(
+      x + width*0.5, y - height*0.5, # C1
+      x + width*0.5, y + height*0.5, # C2
+      x, y + height*0.5) # A2
+
+    context.bezierCurveTo(
+      x - width*0.5, y + height*0.5, # C3
+      x - width*0.5, y - height*0.5, # C4
+      x, y - height*0.5) # A1
+   
+    context.closePath()
+    context.fill()
+        
   visibleCells: (cells) ->
     for cell in @cells when (value=cells.get(cell)) isnt null
       [cell, value]
