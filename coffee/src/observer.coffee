@@ -12,6 +12,8 @@ exports.FieldObserver = class FieldObserver
     @center = null
     cells = visibleNeighborhood @tessellation, @appendRewrite, @minCellSize
     @cellOffsets = (node2array(c) for c in cells)
+    @isDrawingHomePtr = true
+    @colorHomePtr = 'rgba(255,100,100,0.7)'
     
     if center isnt unity
       @rebuildAt center
@@ -41,7 +43,7 @@ exports.FieldObserver = class FieldObserver
     #     #xyt = M.mulv M.hyperbolicInv(@center.repr(@tessellation.group)), xyt
     # it works, but matrix values can become too large.
     # 
-    stack = node2array(@center).reverse()
+    stack = node2array(@center)
     #apply inverse transformations in reverse order
     for [letter, p] in stack by -1
       xyt = M.mulv @tessellation.group.generatorPower(letter, -p), xyt
@@ -54,7 +56,7 @@ exports.FieldObserver = class FieldObserver
     xyt = M.mulv @tfm, xyt
     #(denormalizetion not required, view transform is not large)
     # And map to poincare circle
-    hyperbolic2poincare xyt
+    hyperbolic2poincare xyt #get distance too
     
   getColorForState: (state) ->
     @pattern[ (state % @pattern.length + @pattern.length) % @pattern.length ]
@@ -114,29 +116,46 @@ exports.FieldObserver = class FieldObserver
       else
         context.fillStyle = @getColorForState state
         context.fill()
-    @drawHomePointer context
+    if @isDrawingHomePtr
+      @drawHomePointer context
     #true because immediate-mode observer always finishes drawing.
     return true
 
-  drawHomePointer: (context)->
-    [x,y] = @getHomePtrPos()
-    context.fillStyle = 'red'
-    context.beginPath()
-    width = height = 0.03
-    context.moveTo x, y - height*0.5
+  drawHomePointer: (context, size)->
+    size = 0.06
+    [x,y,d] = @getHomePtrPos()
+    angle = Math.PI - Math.atan2 x, y
     
-    context.bezierCurveTo(
-      x + width*0.5, y - height*0.5, # C1
-      x + width*0.5, y + height*0.5, # C2
-      x, y + height*0.5) # A2
+    context.save()
+    context.translate x,y
+    context.scale size, size
+    context.rotate angle
+    
+    context.fillStyle = @colorHomePtr
+    context.beginPath()
+    
+    context.moveTo 0,0
+    
+    context.bezierCurveTo 0.4,-0.8,  1,-1,  1,-2
+    context.bezierCurveTo  1,-2.6,  0.6,-3,   0,-3
+    context.bezierCurveTo  -0.6,-3,  -1,-2.6, -1,-2
+    context.bezierCurveTo -1,-1,  -0.4, -0.8,  0,0
 
-    context.bezierCurveTo(
-      x - width*0.5, y + height*0.5, # C3
-      x - width*0.5, y - height*0.5, # C4
-      x, y - height*0.5) # A1
-   
     context.closePath()
     context.fill()
+    
+    # context.translate 0, -1
+
+    # context.rotate -angle    
+    # context.translate 0, -1
+    # context.font = "12px sans"
+    
+    # context.fillStyle = 'rgba(255,100,100,1.0)'
+    # context.textAlign = "center"
+    # context.scale 0.09, 0.09
+    # context.fillText("#{Math.round(d*10)/10}", 0, 0);
+    
+    context.restore()
         
   visibleCells: (cells) ->
     for cell in @cells when (value=cells.get(cell)) isnt null

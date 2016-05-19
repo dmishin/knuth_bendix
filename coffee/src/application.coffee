@@ -29,6 +29,7 @@ minVisibleSize = 1/100
 canvasSizeUpdateBlocked = false
 randomFillNum = 2000
 randomFillPercent = 0.4
+margin = 16 #margin pixels
 
 class DefaultConfig
   getGrid: -> [7,3]
@@ -122,6 +123,7 @@ class Application
       @cells.put unity, 1
     
     @observer = new @ObserverClass @tessellation, @appendRewrite, minVisibleSize, config.getViewBase(), config.getViewOffset()
+    @observer.isDrawingHomePtr = E('flag-origin-mark').checked
     @observer.onFinish = -> redraw()
 
     @navigator = new Navigator this
@@ -144,6 +146,7 @@ class Application
     @transitionFunc = parseTransitionFunction @transitionFunc.toString(), @getGroup().n, @getGroup().m
     @observer?.shutdown()
     @observer = new @ObserverClass @tessellation, @appendRewrite, minVisibleSize
+    @observer.isDrawingHomePtr = E('flag-origin-mark').checked
     @observer.onFinish = -> redraw()
     @navigator.clear()
     doClearMemory()
@@ -404,13 +407,14 @@ redraw = -> dirty = true
 
 drawEverything = ->
   return false unless application.observer.canDraw()
-  context.fillStyle = "white"  
+  context.fillStyle = "white"
   #context.clearRect 0, 0, canvas.width, canvas.height
   context.fillRect 0, 0, canvas.width, canvas.height
   context.save()
   s = Math.min( canvas.width, canvas.height ) / 2 #
-  context.scale s, s
-  context.translate 1, 1
+  s1 = s-margin
+  context.translate s, s
+  context.scale s1, s1
   context.fillStyle = "black"
   context.lineWidth = 1.0/s
   context.strokeStyle = "rgb(128,128,128)"
@@ -437,8 +441,9 @@ redrawLoop = ->
 
 toggleCellAt = (x,y) ->
   s = Math.min( canvas.width, canvas.height ) * 0.5
-  xp = x/s - 1
-  yp = y/s - 1
+  s1 = s-margin
+  xp = (x-s)/s1
+  yp = (y-s)/s1
   try
     cell = application.observer.cellFromPoint xp, yp
   catch e
@@ -723,6 +728,11 @@ E('image-fix-size').addEventListener 'click', (e)-> doSetFixedSize E('image-fix-
 E('image-size').addEventListener 'change', (e) ->
   E('image-fix-size').checked=true
   doSetFixedSize true
+  
+E('flag-origin-mark').addEventListener 'change', (e)->
+  application.getObserver().isDrawingHomePtr = E('flag-origin-mark').checked
+  redraw()
+  
 E('btn-mode-edit').addEventListener 'click', (e) -> doSetPanMode false
 E('btn-mode-pan').addEventListener 'click', (e) -> doSetPanMode true
 E('btn-db-save').addEventListener 'click', (e) -> application.saveDialog.show()
@@ -776,6 +786,7 @@ updateCanvasSize()
 updateGrid()
 updateMemoryButtons()
 updatePlayButtons()
+application.getObserver().isDrawingHomePtr = E('flag-origin-mark').checked
 redrawLoop()
 
 #application.saveDialog.show()
