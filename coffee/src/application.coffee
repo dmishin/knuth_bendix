@@ -107,7 +107,13 @@ class Application
   getTransitionFunc: -> @transitionFunc
 
   getMargin: -> if @observer.isDrawingHomePtr then @margin else 0
-  
+  setDrawingHomePtr: (isDrawing)->
+    @observer.isDrawingHomePtr = isDrawing
+    redraw()
+    if localStorage?
+      localStorage.setItem "observer.isDrawingHomePtr", if isDrawing then "1" else "0"
+      console.log "store #{isDrawing}"
+      
   #Convert canvas X,Y coordinates to relative X,Y in (0..1) range
   canvas2relative: (x,y) ->
     s = Math.min(canvas.width, canvas.height) - 2*@getMargin()
@@ -132,7 +138,14 @@ class Application
       @cells.put unity, 1
     
     @observer = new @ObserverClass @tessellation, @appendRewrite, minVisibleSize, config.getViewBase(), config.getViewOffset()
-    @observer.isDrawingHomePtr = E('flag-origin-mark').checked
+    if (isDrawing=localStorage?.getItem('observer.isDrawingHomePtr'))?
+      isDrawing = isDrawing is '1'
+      E('flag-origin-mark').checked = isDrawing
+      @observer.isDrawingHomePtr = isDrawing
+      console.log "restore #{isDrawing}"
+    else
+      @setDrawingHomePtr E('flag-origin-mark').checked
+      
     @observer.onFinish = -> redraw()
 
     @navigator = new Navigator this
@@ -196,8 +209,11 @@ class Application
       @transitionFunc = @transitionFunc.changeGrid @getGroup().n, @getGroup().m
     
     @observer?.shutdown()
-    @observer = new @ObserverClass @tessellation, @appendRewrite, minVisibleSize
-    @observer.isDrawingHomePtr = E('flag-origin-mark').checked
+    
+    oldObserver = @observer
+    @observer = new @ObserverClass @tessellation, @appendRewrite, minVisibleSize    
+    @observer.isDrawingHomePtr = oldObserver.isDrawingHomePtr
+    
     @observer.onFinish = -> redraw()
     @navigator?.clear()
     doClearMemory()
@@ -810,8 +826,7 @@ E('image-size').addEventListener 'change', (e) ->
   doSetFixedSize true
   
 E('flag-origin-mark').addEventListener 'change', (e)->
-  application.getObserver().isDrawingHomePtr = E('flag-origin-mark').checked
-  redraw()
+  application.setDrawingHomePtr E('flag-origin-mark').checked
   
 E('btn-mode-edit').addEventListener 'click', (e) -> doSetPanMode false
 E('btn-mode-pan').addEventListener 'click', (e) -> doSetPanMode true
@@ -869,7 +884,6 @@ updateGeneration()
 updateCanvasSize()
 updateMemoryButtons()
 updatePlayButtons()
-application.getObserver().isDrawingHomePtr = E('flag-origin-mark').checked
 redrawLoop()
 
 #application.saveDialog.show()
