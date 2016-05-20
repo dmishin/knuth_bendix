@@ -1,2 +1,0 @@
-Uploads folder
---------------
