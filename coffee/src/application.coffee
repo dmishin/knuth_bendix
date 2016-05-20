@@ -31,7 +31,6 @@ minVisibleSize = 1/100
 canvasSizeUpdateBlocked = false
 randomFillNum = 2000
 randomFillPercent = 0.4
-margin = 16 #margin pixels
 
 class DefaultConfig
   getGrid: -> [7,3]
@@ -94,7 +93,7 @@ class Application
     
     #@ObserverClass = FieldObserverWithRemoreRenderer
     @ObserverClass = FieldObserver
-    
+    @margin = 16 #margin pixels
     
   getAppendRewrite: -> @appendRewrite
   setCanvasResize: (enable) -> canvasSizeUpdateBlocked = enable
@@ -107,6 +106,14 @@ class Application
   getGroup: -> @tessellation.group
   getTransitionFunc: -> @transitionFunc
 
+  getMargin: -> if @observer.isDrawingHomePtr then @margin else 0
+  
+  #Convert canvas X,Y coordinates to relative X,Y in (0..1) range
+  canvas2relative: (x,y) ->
+    s = Math.min(canvas.width, canvas.height) - 2*@getMargin()
+    isize = 2.0/s
+    [(x - canvas.width*0.5)*isize, (y - canvas.height*0.5)*isize]
+    
   initialize: (config = new DefaultConfig)->
     [n,m] = config.getGrid()
     @tessellation = new Tessellation n, m
@@ -299,6 +306,19 @@ class Application
       field: null
       generation: @generation
     return [fieldData, catalogRecord]
+    
+  toggleCellAt: (x,y) ->
+    [xp, yp] = @canvas2relative x, y
+    try
+      cell = @observer.cellFromPoint xp, yp
+    catch e
+      return
+      
+    if @cells.get(cell) is @paintStateSelector.state
+      @cells.remove cell
+    else
+      @cells.put cell, @paintStateSelector.state
+    redraw()
     
   doExportSvg: ->
     sz = 512
@@ -508,7 +528,7 @@ drawEverything = (w, h, context) ->
   context.fillRect 0, 0, w, h
   context.save()
   s = Math.min( w, h ) / 2 #
-  s1 = s-margin
+  s1 = s-application.getMargin()
   context.translate s, s
   context.scale s1, s1
   context.fillStyle = "black"
@@ -535,21 +555,6 @@ redrawLoop = ->
   requestAnimationFrame redrawLoop
     
 
-toggleCellAt = (x,y) ->
-  s = Math.min( canvas.width, canvas.height ) * 0.5
-  s1 = s-margin
-  xp = (x-s)/s1
-  yp = (y-s)/s1
-  try
-    cell = application.observer.cellFromPoint xp, yp
-  catch e
-    return
-    
-  if application.cells.get(cell) is application.paintStateSelector.state
-    application.cells.remove cell
-  else
-    application.cells.put cell, application.paintStateSelector.state
-  redraw()
 
 isPanMode = true
 doCanvasMouseDown = (e) ->
@@ -565,7 +570,7 @@ doCanvasMouseDown = (e) ->
 
   isPanAction = (e.button is 1) ^ (e.shiftKey) ^ (isPanMode)
   unless isPanAction
-    toggleCellAt x, y
+    application.toggleCellAt x, y
     updatePopulation()    
   else
     dragHandler = new MouseToolCombo application, x, y
