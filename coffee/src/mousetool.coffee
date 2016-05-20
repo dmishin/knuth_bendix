@@ -48,7 +48,7 @@ exports.MouseToolCombo = class MouseToolCombo extends MouseTool
     r2 = ((x-@xc)**2 + (y-@yc)**2) / (r**2)
     #pure rotation at the edge,
     #pure pan at the center
-    q = Math.min(1.0, r2)
+    q = Math.min(1.0, r2**1.5)
 
     mv = M.translationMatrix(dx*k*(1-q) , dy*k*(1-q))
     rt = M.rotationMatrix dAngle*q

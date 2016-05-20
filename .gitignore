@@ -60,6 +60,7 @@ coffee/node_modules
 coffee/node_modules
 coffee/*.js
 coffee/uploads/*.png
+coffee/uploads/*.webm
 coffee/nw-selenium
 coffee/reports
 

@@ -5,15 +5,37 @@ class BaseFunc
   plus: (x,y) -> x+y
   plusInitial: 0
   setGeneration: (g)->
-    
+  getType: -> throw new Error "Function type undefined"
+  toGeneric: -> throw new Error "Function type undefined"
+  evaluate: -> throw new Error "Function type undefined"
+  changeGrid: (n,m)-> this
+  
+# Generic TF is given by its code.
+# Code is a JS object with 3 fields:
+# states: N #integer
+# sum: (r, x) -> r'  #default is (x,y) -> x+y
+# sumInitial: value r0 #default is 0
+# next: (sum, value) -> value
 exports.GenericTransitionFunc = class GenericTransitionFunc extends BaseFunc
-  constructor: ( @numStates, @plus, @plusInitial, @evaluate ) ->
-    if @numStates <= 0 then throw new Error "Number if states incorrect"
+  constructor: ( @code ) ->
     @generation = 0
-  toString: -> "GenericFunction( #{@numStates} states )"
+    @_parse()
+  toString: -> @code
   isStable: -> @evaluate(0,0) is 0
   setGeneration: (g) -> @generation = g
-  getType: -> "custom"  
+  getType: -> "custom"
+  _parse: ->
+    tfObject = eval '('+@code+')'
+    throw new Error("Numer of states not specified") unless tfObject.states?
+    throw new Error("Transition function not specified") unless tfObject.next?
+    
+    @numStates = tfObject.states
+    @plus = (tfObject.sum ? ((x,y)->x+y))
+    @plusInitial = (tfObject.sumInitial ? 0)
+    @evaluate = tfObject.next
+
+    throw new Error "Number of states must be 2 or more" if @numStates <= 1
+  toGeneric: -> this      
 
 #DayNight functions are those, who transform empty field to filled and back.
 # They can be effectively simulated as a pair of 2 rules, applying one rule for even generations and another for odd.
@@ -41,6 +63,8 @@ exports.DayNightTransitionFunc = class DayNightTransitionFunc extends BaseFunc
       1 - @base.evaluate(x,s)
     else
       @base.evaluate(1-x, @base.numNeighbors-s)
+  toGeneric: -> new GenericTransitionFunc dayNightBinaryTransitionFunc2GenericCode this
+  changeGrid: (n,m)-> new DayNightTransitionFunc @base.changeGrid n, m
 
 exports.BinaryTransitionFunc = class BinaryTransitionFunc extends BaseFunc
   constructor: ( @n, @m, bornAt, stayAt ) ->
@@ -65,24 +89,15 @@ exports.BinaryTransitionFunc = class BinaryTransitionFunc extends BaseFunc
     "B " + @_nonzeroIndices(@table[0]).join(" ") + " S " + @_nonzeroIndices(@table[1]).join(" ")
     
   _nonzeroIndices: (arr)-> (i for x, i in arr when x isnt 0)
-
-#Generic TF is given by its code.
-# Code is a JS object with 3 fields:
-# states: N #integer
-# sum: (r, x) -> r'  #default is (x,y) -> x+y
-# sumInitial: value r0 #default is 0
-# next: (sum, value) -> value
-exports.parseGenericTransitionFunction = (str) ->
-  tfObject = eval('('+str+')')
-  throw new Error("Numer of states not specified") unless tfObject.states?
-  throw new Error("Transition function not specified") unless tfObject.next?
+  toGeneric: -> return new GenericTransitionFunc binaryTransitionFunc2GenericCode this
+  changeGrid: (n,m)->
+    #OK, that's dirty but easy
+    parseTransitionFunction @toString(), n, m, false
   
-  #@numStates, @plus, @plusInitial, @evaluate )
-  return new GenericTransitionFunc tfObject.states, (tfObject.sum ? ((x,y)->x+y)), (tfObject.sumInitial ? 0), tfObject.next
-
+  
 # BxxxSxxx
-exports.parseTransitionFunction = (str, n, m, allowDayNight=true) ->
-  match = str.match /B([\d\s]+)S([\d\s]+)/
+exports.parseTransitionFunction = parseTransitionFunction = (str, n, m, allowDayNight=true) ->
+  match = str.match /^\s*B([\d\s]+)S([\d\s]+)$/
   throw new Error("Bad function string: #{str}") unless match?
     
   strings2array = (s)->
@@ -100,7 +115,7 @@ exports.parseTransitionFunction = (str, n, m, allowDayNight=true) ->
     func
 
 
-exports.binaryTransitionFunc2GenericCode = (binTf) ->
+exports.binaryTransitionFunc2GenericCode = binaryTransitionFunc2GenericCode = (binTf) ->
   row2condition = (row) -> ("s===#{sum}" for nextValue, sum in row when nextValue).join(" || ")
   
   conditionBorn = row2condition binTf.table[0]
@@ -125,7 +140,7 @@ exports.binaryTransitionFunc2GenericCode = (binTf) ->
 }"""]
 
 
-exports.dayNightBinaryTransitionFunc2GenericCode = (binTf) ->
+exports.dayNightBinaryTransitionFunc2GenericCode = dayNightBinaryTransitionFunc2GenericCode = (binTf) ->
   row2condition = (row) -> ("s===#{sum}" for nextValue, sum in row when nextValue).join(" || ")
   row2conditionInv = (row) -> ("s===#{binTf.base.numNeighbors-sum}" for nextValue, sum in row when nextValue).join(" || ")
   

@@ -13,15 +13,17 @@
 {lzw_encode} = require "./lzw.coffee"
 {Navigator} = require "./navigator.coffee"
 {DomBuilder} = require "./dom_builder.coffee"
-{E, getAjax, ButtonGroup, windowWidth, windowHeight, documentWidth, removeClass, addClass} = require "./htmlutil.coffee"
+{E, getAjax, ButtonGroup, windowWidth, windowHeight, documentWidth, removeClass, addClass, ValidatingInput} = require "./htmlutil.coffee"
 {FieldObserver} = require "./observer.coffee"
 #{FieldObserverWithRemoreRenderer} = require "./observer_remote.coffee"
 {parseIntChecked, parseFloatChecked} = require "./utils.coffee"
 {Animator} = require "./animator.coffee"
 {MouseToolCombo} = require "./mousetool.coffee"
-{GenericTransitionFunc, BinaryTransitionFunc,DayNightTransitionFunc,binaryTransitionFunc2GenericCode, dayNightBinaryTransitionFunc2GenericCode, parseGenericTransitionFunction, parseTransitionFunction} = require "./rule.coffee"
+{GenericTransitionFunc, BinaryTransitionFunc,DayNightTransitionFunc, parseTransitionFunction} = require "./rule.coffee"
 {parseUri} = require "./parseuri.coffee"
 M = require "./matrix3.coffee"
+
+C2S = require "./ext/canvas2svg.js"
 
 MIN_WIDTH = 100
 
@@ -46,7 +48,7 @@ class UriConfig
   getGrid: ->  
     if @keys.grid?
       try
-        match = @keys.grid.match /{(\d+)[,;](\d+)}/
+        match = @keys.grid.match /(\d+)[,;](\d+)/
         throw new Error("Syntax is bad: #{@keys.grid}") unless match
         n = parseIntChecked match[1]
         m = parseIntChecked match[2]
@@ -99,7 +101,7 @@ class Application
   getCanvasResize: -> canvasSizeUpdateBlocked
   redraw: -> redraw()
   getObserver: -> @observer
-  drawEverything: -> drawEverything()
+  drawEverything: -> drawEverything canvas.width, canvas.height, context
   uploadToServer: (name, cb) -> uploadToServer name, cb
   getCanvas: -> canvas
   getGroup: -> @tessellation.group
@@ -134,7 +136,45 @@ class Application
     @lastBinaryTransitionFunc = @transitionFunc
     @openDialog = new OpenDialog this
     @saveDialog = new SaveDialog this
+    @svgDialog = new SvgDialog this
 
+    @ruleEntry = new ValidatingInput E('rule-entry'),
+      ((ruleStr)=>parseTransitionFunction ruleStr, @getGroup().n, @getGroup().m),
+      ((rule)->""+rule),
+      @transitionFunc 
+      
+    @ruleEntry.onparsed = (rule) => @doSetRule()
+    
+    @updateRuleEditor()
+    @updateGridUI()
+    
+  updateRuleEditor: ->
+    switch @transitionFunc.getType()
+      when "binary"
+        E('controls-rule-simple').style.display=""
+        E('controls-rule-generic').style.display="none"
+        
+      when "custom"
+        E('controls-rule-simple').style.display="none"
+        E('controls-rule-generic').style.display=""
+        
+      else
+        console.dir @transitionFunc
+        throw new Error "Bad transition func"
+        
+  doSetRule: ->
+    if @ruleEntry.message?
+      alert "Failed to parse function: #{@ruleEntry.message}"
+      @transitionFunc = @lastBinaryTransitionFunc ? @transitionFunc
+    else      
+      @transitionFunc = @ruleEntry.value
+      @lastBinaryTransitionFunc = @transitionFunc
+    @paintStateSelector.update @transitionFunc
+      
+    console.log @transitionFunc
+    
+    E('controls-rule-simple').style.display=""
+    E('controls-rule-generic').style.display="none"
 
   setGridImpl: (n, m)->
     @tessellation = new Tessellation n, m
@@ -143,16 +183,25 @@ class Application
     console.log "Finished"
     @appendRewrite = makeAppendRewrite rewriteRuleset
     @getNeighbors = mooreNeighborhood @getGroup().n, @getGroup().m, @appendRewrite
-    @transitionFunc = parseTransitionFunction @transitionFunc.toString(), @getGroup().n, @getGroup().m
+    #transition function should be changed too.
+
+    if @transitionFunc?
+      @transitionFunc = @transitionFunc.changeGrid @getGroup().n, @getGroup().m
+    
     @observer?.shutdown()
     @observer = new @ObserverClass @tessellation, @appendRewrite, minVisibleSize
     @observer.isDrawingHomePtr = E('flag-origin-mark').checked
     @observer.onFinish = -> redraw()
-    @navigator.clear()
+    @navigator?.clear()
     doClearMemory()
     doStopPlayer()
-
-
+    @updateGridUI()
+    
+  updateGridUI: ->
+    E('entry-n').value = "" + application.getGroup().n
+    E('entry-m').value = "" + application.getGroup().m
+    E('grid-num-neighbors').innerHTML = (@getGroup().m-2)*@getGroup().n
+    
   #Actions
   doRandomFill: ->
     randomFillFixedNum @cells, randomFillPercent, unity, randomFillNum, @appendRewrite, @getGroup().n, @getGroup().m, randomStateGenerator(@transitionFunc.numStates)
@@ -216,22 +265,25 @@ class Application
 
     @observer.navigateTo parseNode(assert(record.base)), assert(record.offset)
 
-    if record.funcType is "binary"
-      @transitionFunc = parseTransitionFunction record.funcId, record.gridN, record.gridM
-      E('rule-entry').value = ""+@transitionFunc
-    else if record.funcType is "cusom"
-      @transitionFunc = parseGenericTransitionFunction record.funcId
-    else
-      throw new Error "unknown TF type #{record.funcType}"
-
+    console.log "LOading func type= #{record.funcType}"
+    switch record.funcType
+      when "binary"
+        @transitionFunc = parseTransitionFunction record.funcId, record.gridN, record.gridM
+        @ruleEntry.setValue @transitionFunc
+      when "custom"
+        @transitionFunc = new GenericTransitionFunc record.funcId
+        @paintStateSelector.update @transitionFunc
+      else
+        throw new Error "unknown TF type #{record.funcType}"
+    
     updatePopulation()
     updateGeneration()
-    updateGenericRuleStatus()
+    @updateRuleEditor()
     redraw()
     
   getSaveData: (fname)->
     #[data, catalogRecord]
-    fieldData = stringifyFieldData exportField application.cells
+    fieldData = stringifyFieldData exportField @cells
     funcId = ""+@getTransitionFunc()
     funcType = @getTransitionFunc().getType()
     catalogRecord =
@@ -247,6 +299,52 @@ class Application
       field: null
       generation: @generation
     return [fieldData, catalogRecord]
+    
+  doExportSvg: ->
+    sz = 512
+    svgContext = new C2S sz, sz
+    drawEverything sz, sz, svgContext
+    # Show the generated SVG image
+    @svgDialog.show svgContext.getSerializedSvg()
+
+  doExportUrl: ->
+    #Export field state as URL
+    keys = []
+    keys.push "grid=#{@getGroup().n},#{@getGroup().m}"
+    if @cells.count != 0
+      keys.push "cells=#{@getGroup().n}$#{@getGroup().m}$#{stringifyFieldData exportField @cells}"
+    keys.push "generation=#{@generation}"
+    if @transitionFunc.getType() is "binary"
+      ruleStr = ""+@transitionFunc
+      ruleStr = ruleStr.replace /\s/g, '_'
+      keys.push "rule=#{ruleStr}"
+    keys.push "viewbase=#{showNode @getObserver().getViewCenter()}"
+    [rot, dx, dy] = M.hyperbolicDecompose @getObserver().getViewOffsetMatrix()
+    
+    keys.push "viewoffset=#{rot}:#{dx}:#{dy}"
+
+    basePath = location.href.replace(location.search, '')
+    uri = basePath + "?" + keys.join("&")
+    showExportDialog uri
+    
+class SvgDialog
+  constructor: (@application) ->
+    @dialog = E('svg-export-dialog')
+    @imgContainer = E('svg-image-container')
+    
+  close: ->
+    @imgContainer.innerHTML = ""
+    @dialog.style.display="none"
+    
+  show: (svg) ->
+    dataUri = "data:image/svg+xml;utf8," + encodeURIComponent(svg)
+    dom = new DomBuilder()
+    dom.tag('img').a('src', dataUri).a('alt', 'SVG image').a('title', 'Use right click to save SVG image').end()    
+    @imgContainer.innerHTML = ""
+    @imgContainer.appendChild dom.finalize()
+    #@imgContainer.innerHTML = svg
+    @dialog.style.display=""
+    
 
 updateCanvasSize = ->
   return if canvasSizeUpdateBlocked
@@ -360,8 +458,6 @@ if serverSupportsUpload()
 canvas = E "canvas"
 context = canvas.getContext "2d"
 
-application = new Application
-application.initialize new UriConfig
 
 dragHandler = null
 
@@ -405,13 +501,13 @@ updatePlayButtons = ->
 dirty = true
 redraw = -> dirty = true
 
-drawEverything = ->
+drawEverything = (w, h, context) ->
   return false unless application.observer.canDraw()
   context.fillStyle = "white"
   #context.clearRect 0, 0, canvas.width, canvas.height
-  context.fillRect 0, 0, canvas.width, canvas.height
+  context.fillRect 0, 0, w, h
   context.save()
-  s = Math.min( canvas.width, canvas.height ) / 2 #
+  s = Math.min( w, h ) / 2 #
   s1 = s-margin
   context.translate s, s
   context.scale s1, s1
@@ -430,7 +526,7 @@ dtMax = 1000.0/fpsDefault #
 redrawLoop = ->
   if dirty
     if not fpsLimiting or ((t=Date.now()) - lastTime > dtMax)
-      if drawEverything()
+      if drawEverything canvas.width, canvas.height, context
         tDraw = Date.now() - t
         #adaptively update FPS
         dtMax = dtMax*0.9 + tDraw*2*0.1
@@ -468,7 +564,6 @@ doCanvasMouseDown = (e) ->
   [x,y] = getCanvasCursorPosition e, canvas
 
   isPanAction = (e.button is 1) ^ (e.shiftKey) ^ (isPanMode)
-  console.log "Pan: #{isPanAction}"
   unless isPanAction
     toggleCellAt x, y
     updatePopulation()    
@@ -500,20 +595,8 @@ doCanvasMouseUp = (e) ->
     dragHandler?.mouseUp e
     dragHandler = null
 
-doSetRule =  ->
-  try
-    application.transitionFunc = parseTransitionFunction E('rule-entry').value, application.getGroup().n, application.getGroup().m
-    application.lastBinaryTransitionFunc = application.transitionFunc
-    application.paintStateSelector.update application.transitionFunc
-    console.log application.transitionFunc
-  catch e
-    alert "Failed to parse function: #{e}"
-    application.transitionFunc = application.lastBinaryTransitionFunc ? application.transitionFunc
-    
-  E('controls-rule-simple').style.display=""
-  E('controls-rule-generic').style.display="none"
-
 doOpenEditor = ->
+  E('generic-tf-code').value = application.transitionFunc.code  
   E('generic-tf-editor').style.display = ''
 
 doCloseEditor = ->
@@ -522,14 +605,17 @@ doCloseEditor = ->
 doSetRuleGeneric = ->
   try
     console.log "Set generic rule"
-    application.transitionFunc = parseGenericTransitionFunction E('generic-tf-code').value
+    application.transitionFunc = new GenericTransitionFunc E('generic-tf-code').value
     updateGenericRuleStatus 'Compiled'
     application.paintStateSelector.update application.transitionFunc
+    application.updateRuleEditor()
     E('controls-rule-simple').style.display="none"
     E('controls-rule-generic').style.display=""
+    true
   catch e
     alert "Failed to parse function: #{e}"
     updateGenericRuleStatus 'Error'
+    false
 
 doSetGrid = ->
   try
@@ -551,10 +637,6 @@ doSetGrid = ->
   application.animator.reset()
     
 
-updateGrid = ->
-  E('entry-n').value = "" + application.getGroup().n
-  E('entry-m').value = "" + application.getGroup().m
-  return
 updatePopulation = ->
   E('population').innerHTML = ""+application.cells.count
 updateGeneration = ->
@@ -654,20 +736,14 @@ doImport = ->
     alert "Error parsing: #{e}"
     
 doEditAsGeneric = ->
-  console.log "Generate code"
-  if application.transitionFunc instanceof BinaryTransitionFunc
-    code = binaryTransitionFunc2GenericCode(application.transitionFunc)
-  else if application.transitionFunc instanceof DayNightTransitionFunc
-    code = dayNightBinaryTransitionFunc2GenericCode(application.transitionFunc)
-  else
-    alert("Active transition function is not a binary")
-    return
-  E('generic-tf-code').value = code
-  updateGenericRuleStatus "modified"
-  doSetRuleGeneric()
+  application.transitionFunc = application.transitionFunc.toGeneric()
+  updateGenericRuleStatus 'Compiled'
+  application.paintStateSelector.update application.transitionFunc
+  application.updateRuleEditor()
+  doOpenEditor()
 
 doDisableGeneric = ->
-  doSetRule()
+  application.doSetRule()
 
 doNavigateHome = ->
   application.observer.navigateTo unity
@@ -681,8 +757,7 @@ mouseMoveReceiver.addEventListener "mouseup", doCanvasMouseUp
 mouseMoveReceiver.addEventListener "mousemove", doCanvasMouseMove
 mouseMoveReceiver.addEventListener "mousedrag", doCanvasMouseMove
 
-E("btn-set-rule").addEventListener "click", doSetRule
-E("rule-entry").addEventListener "change", doSetRule
+E("btn-set-rule").addEventListener "click", (e)->application.doSetRule()
 E("btn-set-rule-generic").addEventListener "click", (e)->
   doSetRuleGeneric()
   doCloseEditor()
@@ -737,8 +812,10 @@ E('btn-mode-edit').addEventListener 'click', (e) -> doSetPanMode false
 E('btn-mode-pan').addEventListener 'click', (e) -> doSetPanMode true
 E('btn-db-save').addEventListener 'click', (e) -> application.saveDialog.show()
 E('btn-db-load').addEventListener 'click', (e) -> application.openDialog.show()
+E('btn-export-svg').addEventListener 'click', (e) -> application.doExportSvg()
+E('btn-svg-export-dialog-close').addEventListener 'click', (e) -> application.svgDialog.close()
+E('btn-export-uri').addEventListener 'click', (e) -> application.doExportUrl()
 
-    
 shortcuts =
   'N': -> application.doStep()
   'C': -> application.doReset()
@@ -772,18 +849,19 @@ document.addEventListener "keydown", (e)->
   keyCode += "C" if e.ctrlKey
   keyCode += "A" if e.altKey
   keyCode += "S" if e.shiftKey
-  console.log keyCode
+  #console.log keyCode
   if (handler = shortcuts[keyCode])?
     e.preventDefault()
     handler(e)
 
 ##Application startup    
-E('rule-entry').value = application.transitionFunc.toString()
+application = new Application
+application.initialize new UriConfig
+
 doSetPanMode true
 updatePopulation()
 updateGeneration()
 updateCanvasSize()
-updateGrid()
 updateMemoryButtons()
 updatePlayButtons()
 application.getObserver().isDrawingHomePtr = E('flag-origin-mark').checked

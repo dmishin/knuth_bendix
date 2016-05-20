@@ -42,6 +42,8 @@
 	  N=<input id="entry-n" type="number" class="short"></input>
 	  M=<input id="entry-m" type="number" class="short"></input>
 	  <button id="btn-set-grid" title="Apply grid">Set</button>
+	  <br/>
+	  Neighbors: <span id="grid-num-neighbors" class="numdisplay"></span>
 	</div>
 
 	<div class="control-group">
@@ -95,11 +97,14 @@
 	  <button id="btn-animate-derotate" title="Try to offset start and end points by equal amount so that translation metween them become straight path, and orient that path vertically. Useful for filming spaceships. Not always possible.">Derotate</button>
 	  <button id="btn-upload-animation">Upload animation</button>
 	  <button id="btn-animate-cancel" style="display:none" class="dangerous">Cancel upload</button>	  
+	</div>	
+	<div class="control-group">
+	  <button id="btn-export-svg" title="Export image as SVG">SVG</button>
+	  <button id="btn-export-uri" title="Export world state as URI">URI</button>
 	</div>
 	<div class="control-group">
 	  <input type="checkbox" id="flag-origin-mark" title="When checked, marker of origin is shown">Origin mark</input>
 	</div>
-	
       </div>
 
       <!-- Main content -->
@@ -150,7 +155,8 @@
 
     <!-- popup dialogs ets -->
     <div id="generic-tf-editor" style="display:none" class="popup-container">
-      <div>
+      <div class="popup-shadow"></div>
+      <div class="popup">
 	<h1>Custom Rule</h1>
 	Javascript code:<br/>
 	<textarea id="generic-tf-code" style="width:100%"
@@ -164,7 +170,8 @@
     </div>
 
     <div id="export-dialog" style="display:none" class="popup-container">
-      <div>
+      <div class="popup-shadow"></div>
+      <div class="popup">
 	<h1>Export data</h1>
 	<textarea id="export" style="width:100%"
 		  autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="code-entry"></textarea>
@@ -174,7 +181,8 @@
       </div>
     </div>
     <div id="import-dialog" style="display:none" class="popup-container">
-      <div>
+      <div class="popup-shadow"></div>
+      <div class="popup">
 	<h1>Import data</h1>
 	<textarea id="import" style="width:100%" height="50%" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="code-entry"></textarea>
 	<div class="toolbar">
@@ -185,7 +193,8 @@
     </div>
     <!-- Dialog to load data to indexed DB -->
     <div id="file-dialog-open" style="display:none" class="popup-container">
-      <div>
+      <div class="popup-shadow"></div>
+      <div class="popup">
 	<h1>Load from local database</h1>
 	<div class="toolbar">
 	  Showing: <button id="toggle-all-grids">All grids</button>
@@ -201,7 +210,8 @@
     
     <!-- Dialog to save data to indexed DB -->
     <div id="file-dialog-save" style="display:none" class="popup-container">
-      <div>
+      <div class="popup-shadow"></div>
+      <div class="popup">
 	<h1>Save to local database</h1>
 	<div class="dialog-content">
 	  Save as: <input id="file-dialog-save-as" class="wide" value="">
@@ -212,6 +222,20 @@
 	</div>
 	<hr/>
 	<div id="file-dialog-save-files">
+	</div>
+      </div>
+    </div>
+    
+    <!-- Dialog to save SVG -->
+    <div id="svg-export-dialog" style="display:none" class="popup-container">
+      <div class="popup-shadow"></div>
+      <div class="popup">
+	<h1>Export to SVG</h1>
+	<div class="dialog-content">
+	  <div id="svg-image-container">[Image]</div>
+	</div>
+	<div class="toolbar">
+	  <button id="btn-svg-export-dialog-close">OK</button>
 	</div>
       </div>
     </div>
