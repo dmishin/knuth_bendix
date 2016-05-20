@@ -559,7 +559,6 @@ doCanvasMouseDown = (e) ->
   [x,y] = getCanvasCursorPosition e, canvas
 
   isPanAction = (e.button is 1) ^ (e.shiftKey) ^ (isPanMode)
-  console.log "Pan: #{isPanAction}"
   unless isPanAction
     toggleCellAt x, y
     updatePopulation()    
@@ -732,9 +731,7 @@ doImport = ->
     alert "Error parsing: #{e}"
     
 doEditAsGeneric = ->
-  console.log "Generate code"
   application.transitionFunc = application.transitionFunc.toGeneric()
-  console.log "Set generic rule"
   updateGenericRuleStatus 'Compiled'
   application.paintStateSelector.update application.transitionFunc
   application.updateRuleEditor()
@@ -842,7 +839,7 @@ document.addEventListener "keydown", (e)->
   keyCode += "C" if e.ctrlKey
   keyCode += "A" if e.altKey
   keyCode += "S" if e.shiftKey
-  console.log keyCode
+  #console.log keyCode
   if (handler = shortcuts[keyCode])?
     e.preventDefault()
     handler(e)
